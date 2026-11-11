@@ -231,3 +231,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
 
 /* スマホ幅ではシートを画面に固定する（上の .sheet より後に置く） */
 @media (max-width:760px){ .sheet{position:fixed} }
+
+/* アプリの切り替え（入口：庭とジム） */
+a.chip.link{text-decoration:none;color:var(--ink);background:var(--panel-2)}

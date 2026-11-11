@@ -37,7 +37,7 @@ export function renderPrefs(app) {
   $('p-sleep').checked = on;
   let found = null; try { found = localStorage.getItem(NEMURI_KEY); } catch (e) { /* 読めない */ }
   const today = dayId(Date.now()), sl = readSleep(today);
-  $('p-sleep-state').textContent = !on ? 'つないでいません' : sl ? `今朝の睡眠 ${fmtHours(sl.hours)} を読めています` : found ? 'ねむりの庭の記録は見つかりました。今朝の分はまだありません' : 'この端末では、ねむりの庭の記録が見つかりません（ホーム画面のアプリどうしは保存場所が別のことがあります）';
+  $('p-sleep-state').textContent = !on ? 'つないでいません' : sl ? `今朝の睡眠 ${fmtHours(sl.hours)} を読めています` : found ? 'ねむりの庭の記録は見つかりました。今朝の分はまだありません' : 'ねむりの庭の記録が見つかりません。ホーム画面の「庭とジム」（入口）から開くと読めます。別々のアイコンからだと保存場所が分かれます';
 }
 
 function mount(app) {
