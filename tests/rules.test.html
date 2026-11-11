@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>マッチョクラブ ルールのテスト</title>
+<style>
+body{background:#1f1a22;color:#e6dccb;font:14px/1.6 system-ui,sans-serif;margin:0;padding:16px}
+h1{font-size:18px;margin:0 0 8px}
+#sum{font-weight:700;margin-bottom:12px}
+.ok{color:#9cc06a}.ng{color:#e0705a}
+li{margin:2px 0}
+code{color:#a99c8c}
+</style>
+</head>
+<body>
+<h1>マッチョクラブ ルールのテスト</h1>
+<div id="sum">実行中…</div>
+<ol id="out"></ol>
+<script type="module">
+import { repF, kgF, linePts, capDay, usualKg, scoreSession, recompute, machoOf, staminaDip, daysSinceGym, nextSplit, lastLine, addLine, editLine, finishSession, validLine, level } from '../src/rules.js';
+import { initialState, load, save, migrate, KEY, exportJSON, parseImport } from '../src/state.js';
+import { daysBetween, dayId, fmtKg } from '../src/time.js';
+import { DEFAULT_EXERCISES, MOVES, OPPONENTS } from '../src/catalog.js';
+import { simulate, seedOf } from '../src/fight.js';
+import { routeMet, learnMoves, autoLoadout, loadoutOf, recordFight, fightOn, purseFor, meForFight, currentOpponent } from '../src/rules.js';
+import { gearBonus, buy, wear, cannotBuy, roomItemsOf, beltsOf, wearingOf } from '../src/rules.js';
+import { SHOP } from '../src/catalog.js';
+import { conditionOf, addExercise, updateExercise, moveExercise, weightHistory } from '../src/rules.js';
+import { readSleep, NEMURI_KEY } from '../src/sleep-link.js';
+import { weekOf, weekStreak, lastBySplit, exerciseStats, monthDays, totals, weeklyGoalOf } from '../src/rules.js';
+import { weekStartOf, weekdayOf, addDays } from '../src/time.js';
+
+const out = document.getElementById('out');
+let pass = 0, fail = 0;
+function test(name, fn) {
+  const li = document.createElement('li');
+  try { fn(); li.className = 'ok'; li.textContent = '✓ ' + name; pass++; }
+  catch (e) { li.className = 'ng'; li.innerHTML = '✗ ' + name + ' <code>' + e.message + '</code>'; fail++; console.error(name, e); }
+  out.appendChild(li);
+}
+function eq(a, b, msg = '') { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(msg + ' 期待 ' + JSON.stringify(b) + ' / 実際 ' + JSON.stringify(a)); }
+const near = (a, b, msg = '') => { if (Math.abs(a - b) > 1e-3) throw new Error(msg + ' 期待 ' + b + ' / 実際 ' + a); };
+const ok = (c, msg = '') => { if (!c) throw new Error(msg || '条件が成り立たない'); };
+const EX = initialState().settings.exercises;
+const L = (ex, kg, reps, sets) => ({ ex, kg, reps, sets });
+/** 日付と行の組から、終えたジムを並べた状態を作る */
+function gyms(list) {
+  let s = initialState();
+  for (const [id, split, lines] of list) {
+    for (const l of lines) s = addLine(s, id, split, l);
+    s = finishSession(s, id);
+  }
+  return s;
+}
+/** 簡易ストレージ */
+function mem() { const m = new Map(); return { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k), get length() { return m.size; }, key: i => [...m.keys()][i] ?? null, m }; }
+
+// ---- 計画書 §5.7 ----
+test('60kg×8回×3セット（いつも 60kg）→ 3 × 1.15 × 1 = 3.45 点', () => near(linePts(L('bench', 60, 8, 3), 60), 3.45));
+test('回数：5回以下は 1.0、15回で 1.5、20回でも 1.5', () => { eq(repF(3), 1); eq(repF(5), 1); near(repF(15), 1.5); near(repF(20), 1.5); });
+test('いつも 60kg で 75kg → 1.25、90kg → 1.3 で頭打ち、30kg → 0.8 で下げ止まり', () => { near(kgF(75, 60), 1.25); near(kgF(90, 60), 1.3); near(kgF(30, 60), 0.8); });
+test('自重 0kg（いつも 0kg）→ 1、初めての種目 → 1', () => { eq(kgF(0, 0), 1); eq(kgF(60, null), 1); });
+test('1日にパンチへ 20 点 → 12 + 8×0.5 = 16 点ぶん', () => near(capDay(20), 16));
+test('いつもの重さは前のジムの直近5行の平均（その日の分は入れない）', () => {
+  const s = gyms([['2026-11-01', 'chest', [L('bench', 50, 8, 3)]], ['2026-11-03', 'chest', [L('bench', 60, 8, 3)]], ['2026-11-05', 'chest', [L('bench', 100, 8, 3)]]]);
+  near(usualKg(s.sessions, 'bench', '2026-11-05'), 55);
+  eq(usualKg(s.sessions, 'bench', '2026-11-01'), null);
+});
+test('胸・背中・肩の日がそろうと rounds +1、印が消える、体力 +1、お金 +30', () => {
+  const s = gyms([['2026-11-01', 'chest', [L('bench', 60, 8, 3)]], ['2026-11-03', 'back', [L('chin', 0, 8, 3)]], ['2026-11-05', 'shoulder', [L('sh-press', 30, 10, 3)]]]);
+  eq(s.rounds, 1); eq(s.roundMark, { chest: false, back: false, shoulder: false }); eq(s.money, 30);
+  const one = gyms([['2026-11-05', 'shoulder', [L('sh-press', 30, 10, 3)]]]);
+  ok(s.ability.stamina - one.ability.stamina > 1, 'ひと回りの体力 +1 が入っていない');
+});
+test('同じ分割を3回やってもひと回りにならない', () => {
+  const s = gyms([['2026-11-01', 'chest', [L('bench', 60, 8, 3)]], ['2026-11-03', 'chest', [L('bench', 60, 8, 3)]], ['2026-11-05', 'chest', [L('bench', 60, 8, 3)]]]);
+  eq(s.rounds, 0); eq(s.roundMark.chest, true);
+});
+test('ひと回りの印はその日いちばん点が多い分割（選んだ分割と違ってもよい）', () => {
+  const s = gyms([['2026-11-01', 'chest', [L('chin', 0, 8, 4), L('bench', 60, 8, 1)]]]);
+  eq(s.sessions[0].top, 'back');
+});
+const gymOn = ids => ids.map(id => [id, 'chest', [L('bench', 60, 8, 3)]]);
+test('最後のジムから 3日後は 0、5日後は 2、20日後は 10（上限）', () => {
+  const s = gyms(gymOn(['2026-11-01']));
+  eq(staminaDip(s.sessions, '2026-11-04'), 0); eq(staminaDip(s.sessions, '2026-11-06'), 2); eq(staminaDip(s.sessions, '2026-11-21'), 10);
+});
+test('7% 下がった日に記録 → 3%（半分）、次のジムで −2 → 1', () => {
+  const s = gyms(gymOn(['2026-11-01', '2026-11-11', '2026-11-13']));
+  eq(staminaDip(s.sessions.slice(0, 2), '2026-11-11'), 3);
+  eq(staminaDip(s.sessions, '2026-11-13'), 1);
+});
+test('週3回なら体力は下がらない', () => eq(staminaDip(gyms(gymOn(['2026-11-02', '2026-11-04', '2026-11-07', '2026-11-09', '2026-11-11'])).sessions, '2026-11-13'), 0));
+test('マッチョ度：0 → 段階0、40 → 段階2、300 → 段階7', () => { eq(machoOf(0).stage, 0); eq(machoOf(40).stage, 2); eq(machoOf(300).stage, 7); eq(machoOf(300).name, '鋼の体'); });
+test('マッチョ度の描画用 m は段階の間でなめらか（15 と 40 の真ん中 → 1.5）', () => near(machoOf(27.5).m, 1.5));
+test('マッチョ度は下がらない（サボっても total は減らない）', () => {
+  const s = gyms(gymOn(['2026-11-01']));
+  ok(s.total > 0); eq(recompute(s).total, s.total);
+});
+
+// ---- 記録の流れ ----
+test('終える前のジムは能力に数えない。終えると数える', () => {
+  let s = addLine(initialState(), '2026-11-12', 'chest', L('bench', 60, 8, 3));
+  eq(s.ability.punch, 0); eq(s.sessions[0].done, false);
+  s = finishSession(s, '2026-11-12');
+  ok(s.ability.punch > 0); ok(s.total > 0); eq(s.sessions[0].done, true);
+});
+test('同じ日に2回足すと1件にまとまる', () => {
+  let s = addLine(initialState(), '2026-11-12', 'chest', L('bench', 60, 8, 3));
+  s = addLine(s, '2026-11-12', 'chest', L('dips', 0, 10, 3));
+  eq(s.sessions.length, 1); eq(s.sessions[0].sets.length, 2);
+});
+test('終えた日に行を足すと、すぐ計算し直す', () => {
+  let s = gyms(gymOn(['2026-11-12']));
+  const before = s.total;
+  s = addLine(s, '2026-11-12', 'chest', L('dips', 0, 10, 3));
+  ok(s.total > before);
+});
+test('過去の行を直すと計算し直す。消すと点が減る', () => {
+  let s = gyms([['2026-11-01', 'chest', [L('bench', 60, 8, 3), L('dips', 0, 10, 3)]]]);
+  const t = s.total;
+  s = editLine(s, '2026-11-01', 1, null);
+  ok(s.total < t); eq(s.sessions[0].sets.length, 1);
+  s = editLine(s, '2026-11-01', 0, L('bench', 60, 8, 5));
+  near(s.total, 5 * 1.15);
+});
+test('おかしな値は記録できない（回数0・セット0・マイナスの重さ・小数の回数）', () => {
+  for (const l of [L('bench', 60, 0, 3), L('bench', 60, 8, 0), L('bench', -5, 8, 3), L('bench', 60, 7.5, 3)]) ok(!validLine(l), JSON.stringify(l));
+  let threw = false; try { addLine(initialState(), '2026-11-12', 'chest', L('bench', 60, 0, 3)); } catch (e) { threw = true; }
+  ok(threw);
+});
+test('今日の分割の提案：初めては胸・腕、胸の次は背中、肩の次は胸', () => {
+  eq(nextSplit([], '2026-11-12'), 'chest');
+  eq(nextSplit(gyms([['2026-11-01', 'chest', [L('bench', 60, 8, 3)]]]).sessions, '2026-11-12'), 'back');
+  eq(nextSplit(gyms([['2026-11-01', 'shoulder', [L('sh-press', 30, 8, 3)]]]).sessions, '2026-11-12'), 'chest');
+});
+test('前回の値：その種目のいちばん新しい行', () => {
+  const s = gyms([['2026-11-01', 'chest', [L('bench', 55, 8, 3)]], ['2026-11-03', 'chest', [L('bench', 60, 6, 4)]]]);
+  eq(lastLine(s.sessions, 'bench'), L('bench', 60, 6, 4)); eq(lastLine(s.sessions, 'squat'), null);
+});
+test('ジム1回（4種目×3セット）で、その日の能力が 1 前後伸びる', () => {
+  const s = gyms([['2026-11-01', 'chest', [L('bench', 60, 8, 3), L('db-press', 20, 10, 3), L('dips', 0, 10, 3), L('french', 15, 10, 3)]]]);
+  ok(s.ability.punch > 0.8 && s.ability.punch < 2, 'punch ' + s.ability.punch);
+  ok(s.total > 10 && s.total < 18, 'total ' + s.total);
+});
+test('脚の種目が0でもスピードは肩で伸びる', () => ok(gyms([['2026-11-01', 'shoulder', [L('sh-press', 30, 10, 3), L('side-raise', 8, 12, 3)]]]).ability.speed > 0.5));
+test('日数の差：月をまたいでも正しい', () => { eq(daysBetween('2026-10-30', '2026-11-02'), 3); eq(daysSinceGym([], '2026-11-02'), null); });
+test('kg の表示：60 → 60kg、62.5 → 62.5kg、0 → 自重', () => { eq(fmtKg(60), '60kg'); eq(fmtKg(62.5), '62.5kg'); eq(fmtKg(0), '自重'); });
+test('レベルは切り捨て', () => { eq(level(2.999), 2); eq(level(3), 3); });
+
+// ---- 保存 ----
+test('保存して読み込むと同じ記録・同じ能力', () => {
+  const st = mem(), s = gyms(gymOn(['2026-11-01', '2026-11-03']));
+  save(s, st); const t = load(st);
+  eq(t.sessions.map(x => x.sets), s.sessions.map(x => x.sets)); eq(t.ability, s.ability); eq(t.total, s.total);
+});
+test('壊れたデータは退避して初期状態で起動する', () => {
+  const st = mem(); st.setItem(KEY, '{こわれた');
+  const s = load(st);
+  eq(s.sessions, []); ok([...st.m.keys()].some(k => k.startsWith(KEY + '-broken-')));
+});
+test('新しい版のデータは上書きしない', () => {
+  const st = mem(); st.setItem(KEY, JSON.stringify({ schema: 99, sessions: [] }));
+  load(st); save(initialState(), st);
+  eq(JSON.parse(st.getItem(KEY)).schema, 99);
+});
+test('移行：保存された能力の数字は信用せず、記録から計算し直す', () => {
+  const s = gyms(gymOn(['2026-11-01']));
+  const t = migrate({ ...JSON.parse(exportJSON(s)), ability: { punch: 999, guard: 0, speed: 0, stamina: 0 }, total: 9999 });
+  eq(t.ability, s.ability); eq(t.total, s.total);
+});
+test('移行：おかしな行は捨て、同じ日の2件はまとめる', () => {
+  const t = migrate({ schema: 1, sessions: [
+    { id: '2026-11-01', split: 'chest', done: true, sets: [L('bench', 60, 8, 3), L('bench', 60, 0, 3)] },
+    { id: '2026-11-01', split: 'chest', done: true, sets: [L('dips', 0, 10, 3)] },
+    { id: 'きのう', sets: [] },
+  ] });
+  eq(t.sessions.length, 1); eq(t.sessions[0].sets.length, 2);
+});
+test('書き出し → 読み込みで同じ状態', () => {
+  const s = gyms(gymOn(['2026-11-01', '2026-11-03']));
+  const t = parseImport(exportJSON(s));
+  eq(t.sessions, s.sessions); eq(t.money, s.money);
+});
+test('仮の種目リストは全部の部位グループの種目がある', () => {
+  for (const g of ['push', 'tri', 'pull', 'curl', 'shoulder', 'leg']) ok(DEFAULT_EXERCISES.some(e => e.group === g), g);
+});
+
+// ---- 技と試合（M3） ----
+const withAb = (ab, extra = {}) => learnMoves({ ...initialState(), ability: { punch: 0, guard: 0, speed: 0, stamina: 0, ...ab }, ...extra });
+test('最初からジャブを持っている', () => { ok(initialState().moves.jab); eq(loadoutOf(initialState()), ['jab']); });
+test('アッパー：パンチ9だけでも、パンチ7＋スピード3でも、ブルーノに勝っても覚える', () => {
+  ok(withAb({ punch: 9 }).moves.upper, 'パンチ9');
+  ok(withAb({ punch: 7, speed: 3 }).moves.upper, 'パンチ7＋スピード3');
+  ok(!withAb({ punch: 8 }).moves.upper, 'パンチ8では覚えない');
+  ok(withAb({}, { fights: [{ id: '2026-11-01', opp: 2, win: true }] }).moves.upper, 'ブルーノに勝つ');
+});
+test('ブルーノに3回負けてもアッパーを覚える', () => {
+  const f = [1, 2, 3].map(i => ({ id: '2026-11-0' + i, opp: 2, win: false }));
+  ok(!withAb({}, { fights: f.slice(0, 2) }).moves.upper); ok(withAb({}, { fights: f }).moves.upper);
+});
+test('ワンツー：ジャブとストレートを持って、ひと回り2回', () => {
+  ok(!withAb({ punch: 3 }, { rounds: 1 }).moves.onetwo); ok(withAb({ punch: 3 }, { rounds: 2 }).moves.onetwo);
+});
+test('どの技も、試合に勝たなくても鍛えるだけで覚える道がある', () => {
+  for (const m of MOVES) ok(m.routes.some(r => !('beat' in r)), m.name);
+});
+test('覚えた技は能力が下がっても消えない', () => {
+  const s = withAb({ punch: 9 });
+  ok(learnMoves({ ...s, ability: { punch: 0, guard: 0, speed: 0, stamina: 0 } }).moves.upper);
+});
+test('おすすめの3つは攻める技を2つ以上入れる', () => {
+  const s = withAb({ punch: 9, guard: 8, speed: 8, stamina: 8 }, { rounds: 3 });
+  const lo = autoLoadout(s.moves);
+  eq(lo.length, 3); ok(lo.filter(id => MOVES.find(m => m.id === id).kind === 'atk').length >= 2);
+});
+test('選んだ技が覚えていないものなら外し、空きはおすすめで埋める', () => {
+  const s = { ...withAb({ punch: 3 }), loadout: ['upper', 'straight', null] };
+  const lo = loadoutOf(s); eq(lo[0], 'straight'); eq(lo.length, 2);
+});
+test('同じ種・同じ条件の試合は同じ結果', () => {
+  const me = { name: 'a', ab: { punch: 3, guard: 2, speed: 2, stamina: 3 }, moves: ['jab', 'straight'] };
+  const o = OPPONENTS[1];
+  const a = simulate(me, { name: o.name, ab: o.ab, moves: o.moves }, 4, seedOf('x')), b = simulate(me, { name: o.name, ab: o.ab, moves: o.moves }, 4, seedOf('x'));
+  eq(a.win, b.win); eq(a.how, b.how); eq(a.log.length, b.log.length); eq(a.score, b.score);
+});
+test('試合は KO・TKO・判定のどれかで終わり、ラウンド数を超えない', () => {
+  const me = { name: 'a', ab: { punch: 5, guard: 5, speed: 5, stamina: 8 }, moves: ['jab', 'straight', 'weave'] };
+  for (let i = 0; i < 50; i++) {
+    const o = OPPONENTS[i % 7], r = simulate(me, { name: o.name, ab: o.ab, moves: o.moves }, 8, i);
+    ok(['KO', 'TKO', '判定'].includes(r.how)); ok(r.round >= 1 && r.round <= 8);
+  }
+});
+test('うんと強ければほぼ勝ち、うんと弱ければほぼ負け', () => {
+  const o = OPPONENTS[3], foe = { name: o.name, ab: o.ab, moves: o.moves };
+  let w = 0, l = 0;
+  for (let i = 0; i < 40; i++) {
+    if (simulate({ name: 'a', ab: { punch: 20, guard: 20, speed: 20, stamina: 30 }, moves: ['upper', 'onetwo', 'weave'] }, foe, 8, i).win) w++;
+    if (!simulate({ name: 'a', ab: { punch: 0, guard: 0, speed: 0, stamina: 0 }, moves: ['jab'] }, foe, 8, i).win) l++;
+  }
+  ok(w >= 38, '強い ' + w); ok(l >= 38, '弱い ' + l);
+});
+test('試合の記録：勝つと次の相手、賞金は満額。同じ日に2試合はできない', () => {
+  let s = initialState();
+  s = recordFight(s, '2026-11-12', 1, 1, { win: true, how: 'KO', round: 2 });
+  eq(s.opponent, 2); eq(s.money, OPPONENTS[0].purse); eq(currentOpponent(s).id, 2);
+  ok(fightOn(s, '2026-11-12'));
+  let threw = false; try { recordFight(s, '2026-11-12', 2, 1, { win: true, how: 'KO', round: 1 }); } catch (e) { threw = true; } ok(threw);
+});
+test('負けても賞金の2割。勝った相手との再戦は2割', () => {
+  let s = recordFight(initialState(), '2026-11-12', 1, 1, { win: false, how: '判定', round: 4 });
+  eq(s.opponent, 1); eq(s.money, OPPONENTS[0].purse * 0.2);
+  s = recordFight(s, '2026-11-13', 1, 1, { win: true, how: 'KO', round: 1 });
+  eq(purseFor(s, 1, true), OPPONENTS[0].purse * 0.2);
+});
+test('サボりで下がった体力は試合の体力に効く', () => {
+  const s = gyms(gymOn(['2026-11-01']));
+  eq(meForFight(s, '2026-11-02').hpPct, 100); eq(meForFight(s, '2026-11-08').hpPct, 96);   // 7日後 → 4% 下がる
+});
+
+// ---- お金と店（M5） ----
+const rich = (money = 1000) => ({ ...initialState(), fights: [{ id: '2026-11-01', opp: 7, win: true, money }] });
+test('買うとお金が減り、部屋に置かれる。お金が足りなければ買えない', () => {
+  let s = recompute(rich(100));
+  eq(s.money, 100);
+  s = buy(s, 'bench', '2026-11-12');
+  eq(s.money, 20); ok(roomItemsOf(s).includes('bench'));
+  ok(cannotBuy(s, 'rack')); let threw = false; try { buy(s, 'rack', '2026-11-12'); } catch (e) { threw = true; } ok(threw);
+  ok(cannotBuy(s, 'bench'), '同じ品は2つ買えない');
+});
+test('最初の部屋は床のダンベルだけ', () => eq(roomItemsOf(initialState()), ['dumbbell']));
+test('用具は買った次の日のジムから効く（パンチ +5%）', () => {
+  let s = buy(recompute(rich()), 'bench', '2026-11-12');
+  const day = d => gyms([[d, 'chest', [L('bench', 60, 8, 3)]]]);
+  const plain = day('2026-11-13').ability.punch;
+  s = addLine(s, '2026-11-12', 'chest', L('bench', 60, 8, 3)); s = finishSession(s, '2026-11-12');
+  near(s.ability.punch, plain, '買った日');
+  s = addLine(s, '2026-11-13', 'chest', L('bench', 60, 8, 3)); s = finishSession(s, '2026-11-13');
+  ok(s.ability.punch - plain > plain * 1.04, '次の日は +5%');
+});
+test('用具の上乗せは1つの能力につき +15% まで', () => {
+  const owned = Object.fromEntries(SHOP.filter(x => x.kind === 'gear').map(x => [x.id, { at: '2026-01-01', price: 0 }]));
+  const b = gearBonus(owned, '2026-02-01');
+  ok(Object.values(b).every(v => v <= 0.15 + 1e-9)); near(b.speed, 0.1);
+});
+test('服は買うとすぐ着る。持っている色と最初の色に着替えられる', () => {
+  let s = buy(recompute(rich()), 'trunks-red', '2026-11-12');
+  eq(wearingOf(s).trunks, 'red');
+  s = wear(s, 'trunks', 'blue'); eq(wearingOf(s).trunks, 'blue');
+  let threw = false; try { wear(s, 'trunks', 'white'); } catch (e) { threw = true; } ok(threw, '持っていない服');
+});
+test('お金は記録から計算し直す（買った分を引く）', () => {
+  const s = buy(recompute(rich(500)), 'neon', '2026-11-12');
+  eq(migrate(JSON.parse(exportJSON(s))).money, 250);
+});
+test('ベルト：章の終わりの相手に勝つと、その章のベルト', () => {
+  eq(beltsOf({ ...initialState(), fights: [{ opp: 1, win: true }, { opp: 2, win: true }, { opp: 4, win: false }] }), [1]);
+});
+test('店の品を全部買うと、7人の賞金とひと回りのお金でだいたい足りる', () => {
+  const total = SHOP.reduce((a, x) => a + x.price, 0), purse = OPPONENTS.reduce((a, o) => a + o.purse, 0);
+  ok(total <= purse + 7 * 30 && total >= purse * 0.6, `店 ${total} / 賞金 ${purse}`);
+});
+
+// ---- ねむりの庭・種目の編集・記録帳（M6） ----
+const nemuri = (nights, extra = {}) => { const st = mem(); st.setItem(NEMURI_KEY, JSON.stringify({ schema: 1, settings: { goalHours: 7 }, nights, sleeping: null, ...extra })); return st; };
+const H = 3600000, wake = new Date(2026, 10, 12, 7, 0).getTime();
+test('ねむりの庭：今朝起きた夜があれば睡眠時間と目標を読む', () => {
+  const r = readSleep('2026-11-12', nemuri([{ id: '2026-11-12', bed: wake - 7.5 * H, wake }]));
+  near(r.hours, 7.5); eq(r.goal, 7);
+});
+test('ねむりの庭：きのうの夜しかない・おやすみ中・データがない・壊れている → 読まない', () => {
+  eq(readSleep('2026-11-12', nemuri([{ id: '2026-11-11', bed: wake - 32 * H, wake: wake - 24 * H }])), null);
+  eq(readSleep('2026-11-12', nemuri([{ id: '2026-11-12', bed: wake - 7 * H, wake }], { sleeping: { since: wake } })), null);
+  eq(readSleep('2026-11-12', mem()), null);
+  const st = mem(); st.setItem(NEMURI_KEY, '{こわれた'); eq(readSleep('2026-11-12', st), null);
+});
+test('コンディション：目標以上は絶好調、1時間足りないまではふつう、それより短いと寝不足、分からないとふつう', () => {
+  eq(conditionOf({ hours: 7.2, goal: 7 }).key, 'great'); eq(conditionOf({ hours: 6.1, goal: 7 }).key, 'normal');
+  eq(conditionOf({ hours: 5.5, goal: 7 }).key, 'short'); eq(conditionOf(null).key, 'unknown'); eq(conditionOf(null).name, 'ふつう');
+});
+test('絶好調は能力 +5%、寝不足は体力 90% から（サボりとも重なる）', () => {
+  const s = gyms(gymOn(['2026-11-01']));
+  near(meForFight(s, '2026-11-02', { hours: 8, goal: 7 }).ab.punch, s.ability.punch * 1.05);
+  eq(meForFight(s, '2026-11-02', { hours: 5, goal: 7 }).hpPct, 90);
+  eq(meForFight(s, '2026-11-08', { hours: 5, goal: 7 }).hpPct, 86);
+});
+test('種目を足す・名前を直す・空の名前は足せない', () => {
+  let s = addExercise(initialState(), { id: 'my-1', name: ' インクラインベンチ ', group: 'push' });
+  eq(s.settings.exercises.at(-1), { id: 'my-1', name: 'インクラインベンチ', group: 'push' });
+  s = updateExercise(s, 'my-1', { name: '45度ベンチ' }); eq(s.settings.exercises.at(-1).name, '45度ベンチ');
+  let threw = false; try { addExercise(s, { id: 'my-2', name: '  ', group: 'push' }); } catch (e) { threw = true; } ok(threw);
+});
+test('部位を変えると点の入る能力が変わる（記録から計算し直す）', () => {
+  let s = gyms([['2026-11-01', 'chest', [L('dips', 0, 10, 3)]]]);
+  ok(s.ability.punch > 0); eq(s.ability.guard, 0);
+  s = updateExercise(s, 'dips', { group: 'pull' });
+  eq(s.ability.punch, 0); ok(s.ability.guard > 0);
+});
+test('隠した種目も記録は残り、点も数える。並べ替えできる', () => {
+  let s = gyms([['2026-11-01', 'chest', [L('dips', 0, 10, 3)]]]);
+  const t = s.total; s = updateExercise(s, 'dips', { hidden: true });
+  ok(s.settings.exercises.find(e => e.id === 'dips').hidden); eq(s.total, t);
+  const before = s.settings.exercises.map(e => e.id).indexOf('db-press');
+  s = moveExercise(s, 'db-press', -1); eq(s.settings.exercises[before - 1].id, 'db-press');
+});
+test('種目ごとの重さ：最初・いま・いちばん重い', () => {
+  const h = weightHistory(gyms([['2026-11-01', 'chest', [L('bench', 55, 8, 3)]], ['2026-11-03', 'chest', [L('bench', 65, 6, 3)]], ['2026-11-05', 'chest', [L('bench', 60, 8, 3)]]])).get('bench');
+  eq([h.first, h.last, h.best, h.days], [55, 60, 65, 3]);
+});
+
+// ---- 記録の集計 ----
+test('週は月曜はじまり（2026-11-12 は木曜、その週の月曜は 11-09）', () => { eq(weekdayOf('2026-11-12'), 3); eq(weekStartOf('2026-11-12'), '2026-11-09'); eq(weekStartOf('2026-11-09'), '2026-11-09'); eq(addDays('2026-11-30', 1), '2026-12-01'); });
+test('今週の回数・セット数・曜日ごとの分割', () => {
+  const s = gyms([['2026-11-08', 'chest', [L('bench', 60, 8, 3)]], ['2026-11-09', 'chest', [L('bench', 60, 8, 3)]], ['2026-11-11', 'back', [L('chin', 0, 8, 4)]]]);
+  const w = weekOf(s, '2026-11-12');
+  eq(w.count, 2); eq(w.sets, 7); eq(w.days, ['chest', null, 'back', null, null, null, null]);
+});
+test('週3回を続けた週の数（今週は達成していれば数える）', () => {
+  const ids = ['2026-10-26', '2026-10-28', '2026-10-30', '2026-11-02', '2026-11-04', '2026-11-06', '2026-11-09'];
+  const s = gyms(gymOn(ids));
+  eq(weeklyGoalOf(s), 3); eq(weekStreak(s, '2026-11-12'), 2);
+  eq(weekStreak(gyms(gymOn([...ids, '2026-11-10', '2026-11-11'])), '2026-11-12'), 3);
+});
+test('部位ごとの前回は何日前か', () => {
+  const s = gyms([['2026-11-05', 'chest', [L('bench', 60, 8, 3)]], ['2026-11-10', 'back', [L('chin', 0, 8, 3)]]]);
+  eq(lastBySplit(s, '2026-11-12'), { chest: 7, back: 2, shoulder: null });
+});
+test('種目ごとの前回と自己ベスト（いちばん重い。同じ重さなら回数が多いほう）', () => {
+  const h = exerciseStats(gyms([['2026-11-01', 'chest', [L('bench', 60, 8, 3)]], ['2026-11-03', 'chest', [L('bench', 65, 5, 3)]], ['2026-11-05', 'chest', [L('bench', 65, 6, 2), L('bench', 55, 10, 2)]]])).get('bench');
+  eq(h.last, L('bench', 55, 10, 2)); eq(h.best, L('bench', 65, 6, 2)); eq(h.bestId, '2026-11-05'); eq(h.days, 3);
+});
+test('月のカレンダーと累計', () => {
+  const s = gyms(gymOn(['2026-10-30', '2026-11-02', '2026-11-04']));
+  eq(Object.keys(monthDays(s, 2026, 11)), ['2026-11-02', '2026-11-04']);
+  eq(totals(s), { gyms: 3, sets: 9, since: '2026-10-30' });
+});
+
+document.getElementById('sum').innerHTML = `<span class="${fail ? 'ng' : 'ok'}">${pass} 件成功 / ${fail} 件失敗</span>`;
+document.title = (fail ? '✗ ' : '✓ ') + document.title;
+</script>
+</body>
+</html>

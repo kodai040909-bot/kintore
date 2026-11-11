@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>マッチョクラブ アイコンを作る</title>
+<style>
+body{background:#1f1a22;color:#e6dccb;font:14px/1.6 system-ui,sans-serif;margin:0;padding:16px}
+h1{font-size:18px;margin:0 0 4px}
+p{color:#a99c8c;margin:0 0 14px}
+.list{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end}
+figure{margin:0;text-align:center}
+canvas{image-rendering:pixelated;display:block;margin:0 auto 6px;border-radius:22%}
+a{color:#d9a35b}
+</style>
+</head>
+<body>
+<h1>アイコンを作る</h1>
+<p>32×32 のドット絵（src/art/icon.js）を、各サイズに整数倍で拡大します。リンクを押すと PNG を保存できます。保存したものは icons/ に置きます（tools/serve.py で開いて <code>?save=1</code> を付けると icons/ に直接保存）。maskable は円に切り抜かれても欠けないよう、余白を広くとっています。</p>
+<div class="list" id="list"></div>
+<script type="module">
+import { drawIcon, ICON, ICON_BG } from '../src/art/icon.js';
+
+/** size の正方形に、32px の絵を k 倍して中央に置く */
+function render(size, k) {
+  const src = document.createElement('canvas'); src.width = src.height = ICON; drawIcon(src.getContext('2d'));
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+  x.fillStyle = ICON_BG; x.fillRect(0, 0, size, size);
+  const w = ICON * k, o = Math.floor((size - w) / 2);
+  x.drawImage(src, o, o, w, w);
+  return c;
+}
+const SIZES = [
+  ['apple-touch-icon-180.png', 180, 5],
+  ['icon-192.png', 192, 6],
+  ['icon-512.png', 512, 16],
+  ['icon-maskable-512.png', 512, 12],
+];
+const list = document.getElementById('list');
+const save = new URLSearchParams(location.search).has('save');
+for (const [name, size, k] of SIZES) {
+  const c = render(size, k), f = document.createElement('figure');
+  c.style.width = c.style.height = Math.min(size, 180) + 'px';
+  if (name.includes('maskable')) c.style.borderRadius = '50%';
+  const a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = name; a.textContent = name;
+  f.append(c, a); list.append(f);
+  if (save) { const blob = await new Promise(r => c.toBlob(r, 'image/png')); await fetch('/icons/' + name, { method: 'PUT', body: blob }); }
+}
+if (save) document.title = 'saved';
+</script>
+</body>
+</html>

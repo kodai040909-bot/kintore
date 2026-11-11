@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>マッチョクラブ 絵の総点検</title>
+<style>
+body{background:#1f1a22;color:#e6dccb;font:13px/1.6 system-ui,sans-serif;margin:0;padding:16px}
+h2{font-size:14px;color:#d9a35b;margin:14px 0 4px}
+canvas{image-rendering:pixelated;display:block;max-width:100%}
+</style>
+</head>
+<body>
+<p>全部のポーズ・相手・服の色・部屋の品を1つずつ描いて、見えないもの・重なってしまうものがないか確かめるページ（開発用）。<code>?save=1</code> で design/screenshots に保存する（tools/serve.py のときだけ）。</p>
+<h2>ポーズ・相手・服</h2><canvas id="a"></canvas>
+<h2>部屋の品（最初の部屋＋1つずつ＋全部）と、壁に掛けたグローブ4色</h2><canvas id="b"></canvas>
+<script type="module">
+import { sideFighter, LOOKS, BUILD, POSES } from '../src/art/side.js';
+import { fighter, body } from '../src/art/fighter.js';
+import { room, ROOM_ITEMS } from '../src/art/room.js';
+import { drawArena } from '../src/art/ring.js';
+import { TRUNKS, GLOVES, WRAPS, frontLook, sideLook } from '../src/art/wear.js';
+import { DEFAULT_WEAR } from '../src/catalog.js';
+import { mk } from '../src/art/pixel.js';
+import { drawGym } from '../src/art/scene.js';
+
+const S = 3, BG = '#4a3d4f';
+// --- 1枚目：横向きのポーズ・相手・グローブとトランクスの色、正面のトランクスとバンテージ
+const poses = Object.keys(POSES);
+const rows = [
+  poses.map(p => sideFighter(7, p, LOOKS.me)),
+  poses.map(p => sideFighter(0, p, LOOKS.me)),
+  [1, 2, 3, 4, 5, 6, 7].map(i => sideFighter(BUILD[i], 'guard', LOOKS[i], true)),
+  [1, 2, 3, 4, 5, 6, 7].map(i => sideFighter(BUILD[i], 'jab', LOOKS[i], true)),
+  Object.keys(GLOVES).map(c => sideFighter(5, 'guard', sideLook({ ...DEFAULT_WEAR, gloves: c }))).concat(Object.keys(TRUNKS).map(c => sideFighter(5, 'jab', sideLook({ ...DEFAULT_WEAR, trunks: c })))),
+  Object.keys(TRUNKS).map(c => fighter(body(5), frontLook({ ...DEFAULT_WEAR, trunks: c }))).concat(Object.keys(WRAPS).map(c => fighter(body(5), { ...frontLook({ ...DEFAULT_WEAR, wraps: c }), pose: 'flex' }))),
+];
+const a = mk(48 * poses.length, 56 * rows.length), ag = a.getContext('2d');
+rows.forEach((r, j) => { ag.fillStyle = j % 2 ? '#3d3242' : BG; ag.fillRect(0, j * 56, a.width, 56); r.forEach((c, i) => ag.drawImage(c, i * 48 - 8, j * 56 - 6)); });
+// 同じ色のリングの上で、グローブが沈まないかも見る
+const ring = mk(160, 104); drawArena(ring.getContext('2d'), 5);
+
+// --- 2枚目：部屋（最初＋品を1つずつ＋全部）
+const sets = [['dumbbell'], ...ROOM_ITEMS.filter(x => x !== 'dumbbell').map(x => ['dumbbell', x]), ROOM_ITEMS];
+const gyms = Object.keys(GLOVES).map(gc => { const c = mk(160, 104); drawGym(c, { m: 7, items: ROOM_ITEMS, belts: [1, 2, 3, 4, 5], look: frontLook({ ...DEFAULT_WEAR, gloves: gc }), gloves: GLOVES[gc] }); return c; });
+const tiles = [...sets.map(it => { const c = mk(160, 104); room(c.getContext('2d'), it, [1, 2, 3, 4, 5]); return c; }), ...gyms];
+const cols = 4, b = mk(160 * cols, 104 * Math.ceil(tiles.length / cols)), bg = b.getContext('2d');
+tiles.forEach((c, i) => bg.drawImage(c, (i % cols) * 160, Math.floor(i / cols) * 104));
+
+for (const [id, src] of [['a', a], ['b', b]]) {
+  const el = document.getElementById(id); el.width = src.width * S; el.height = src.height * S;
+  const g = el.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(src, 0, 0, el.width, el.height);
+}
+if (new URLSearchParams(location.search).has('save')) {
+  for (const [id, name] of [['a', 'check-sprites'], ['b', 'check-room']]) {
+    const blob = await new Promise(r => document.getElementById(id).toBlob(r, 'image/png'));
+    await fetch(`/design/screenshots/${name}.png`, { method: 'PUT', body: blob });
+  }
+  document.title = 'saved';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>マッチョクラブ 釣り合いのシミュレーター</title>
+<style>
+body{background:#1f1a22;color:#e6dccb;font:14px/1.6 system-ui,sans-serif;margin:0;padding:16px}
+h1{font-size:18px;margin:0 0 4px}
+p{color:#a99c8c;font-size:13px;margin:0 0 12px}
+table{border-collapse:collapse;font-size:13px}
+th,td{border:1px solid #4a3f50;padding:4px 8px;text-align:center}
+th{background:#2a2330;font-weight:500}
+td.ok{color:#9cc06a}td.slow{color:#e0a05a}td.ng{color:#e0705a}
+</style>
+</head>
+<body>
+<h1>釣り合いのシミュレーター</h1>
+<p>月・水・金にジムへ行ったとき、相手ごとに「勝率5割を超える累計ジム回数」。各200試合。目安の1.5倍以内なら緑、こえたら橙。数十秒かかります。</p>
+<div id="out">計算中…</div>
+<script type="module">
+import { report, PROFILES } from './balance.js';
+import { OPPONENTS } from '../src/catalog.js';
+setTimeout(() => {
+  const r = report(200);
+  let h = '<table><tr><th>鍛え方</th>' + OPPONENTS.map(o => `<th>${o.id}. ${o.name}<br><small>目安 ${o.target}回</small></th>`).join('') + '</tr>';
+  for (const [k, p] of Object.entries(PROFILES)) {
+    h += `<tr><th>${p.name}</th>` + r[k].map((n, i) => {
+      const t = OPPONENTS[i].target, cls = n == null ? 'ng' : n <= Math.max(t + 1, t * 1.5) ? 'ok' : 'slow';
+      return `<td class="${cls}">${n ?? '45回でも無理'}</td>`;
+    }).join('') + '</tr>';
+  }
+  document.getElementById('out').innerHTML = h + '</table>';
+}, 50);
+</script>
+</body>
+</html>

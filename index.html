@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f1a22">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="マッチョクラブ">
+<title>マッチョクラブ</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="src/styles.css">
+<script type="module" src="src/main.js"></script>
+</head>
+<body>
+<div class="page">
+  <div class="phone">
+    <div class="screen">
+      <div class="notice" id="notice" hidden></div>
+      <div class="views">
+
+        <section class="view" id="v-home" hidden>
+          <div class="top">
+            <div class="date" id="h-date"></div>
+            <div class="chips"><span class="chip gold" id="h-money"></span></div>
+          </div>
+          <div class="dev" id="dev" hidden></div>
+          <canvas class="scene" id="h-scene" width="160" height="104" aria-label="ジムの部屋と自分の分身。タップするとポーズ"></canvas>
+          <div class="card">
+            <div class="lbl"><span>体つき</span><span class="dot" id="h-macho"></span></div>
+            <div class="bar"><i id="h-macho-bar"></i></div>
+            <div class="hint" id="h-macho-hint"></div>
+          </div>
+          <div class="card" id="h-abil"></div>
+          <div class="card">
+            <div class="lbl"><span>今日</span><span id="h-split"></span></div>
+            <div class="weekrow small" id="h-week"></div>
+            <div class="hint" id="h-today"></div>
+            <button class="btn primary" id="h-go">記録する</button>
+          </div>
+          <div class="card">
+            <div class="lbl"><span>次の試合</span><span id="h-opp-ch"></span></div>
+            <div class="dot" id="h-opp"></div>
+            <div class="hint" id="h-opp-hint"></div>
+            <button class="btn" id="h-fight">試合へ</button>
+          </div>
+          <div class="card">
+            <div class="lbl"><span>3分割ひと回り</span><span class="dot" id="h-rounds"></span></div>
+            <div class="marks" id="h-marks"></div>
+          </div>
+          <div class="card" id="h-recent-card">
+            <div class="lbl"><span>最近のジム</span></div>
+            <ul class="recent" id="h-recent"></ul>
+          </div>
+        </section>
+
+        <section class="view" id="v-record" hidden>
+          <div class="top">
+            <div class="date" id="r-date"></div>
+            <div class="chips" id="r-state"></div>
+          </div>
+          <div class="seg" id="r-split" role="radiogroup" aria-label="今日の分割"></div>
+          <div>
+            <h2 class="sub">いつもの種目</h2>
+            <ul class="exlist" id="r-list"></ul>
+            <button class="btn ghost small" id="r-more">ほかの分割の種目も出す</button>
+            <ul class="exlist" id="r-others" hidden></ul>
+          </div>
+          <div>
+            <h2 class="sub">今日の記録</h2>
+            <ul class="lines" id="r-lines"></ul>
+            <p class="hint" id="r-empty">種目をタップして記録します。「前回」で前回と同じ内容を一発で足せます。</p>
+          </div>
+          <button class="btn primary" id="r-finish">記録を終える</button>
+          <p class="hint center" id="r-done-hint" hidden>記録済みです。足したり直したりすると、すぐ反映されます。</p>
+        </section>
+
+        <section class="view" id="v-fight" hidden>
+          <div class="top">
+            <div class="date">試合</div>
+            <div class="chips"><span class="chip gold" id="f-money"></span></div>
+          </div>
+          <ol class="ladder" id="f-ladder"></ol>
+          <div class="stage">
+            <div class="names"><span>あなた</span><span id="f-foename"></span></div>
+            <canvas class="scene" id="f-stage" width="160" height="104" aria-label="リング"></canvas>
+            <div class="banner" id="f-banner"></div>
+          </div>
+          <div class="ticker" id="f-line"></div>
+          <div class="row" id="f-ctl" hidden><button class="btn ghost" id="f-fast">早送り</button><button class="btn ghost" id="f-skip">結果だけ見る</button></div>
+          <div class="card" id="f-opp"></div>
+          <div class="card">
+            <div class="lbl"><span>持ち込む技（3つまで）</span><span id="f-count"></span></div>
+            <div class="movechips" id="f-moves"></div>
+            <p class="hint" id="f-movehint"></p>
+          </div>
+          <div class="card">
+            <div class="lbl"><span>コンディション</span><span id="f-cond"></span></div>
+            <p class="hint" id="f-condhint"></p>
+          </div>
+          <button class="btn primary" id="f-go">試合をする</button>
+          <div id="f-result"></div>
+        </section>
+
+        <section class="view" id="v-shop" hidden>
+          <div class="top">
+            <div class="date">店</div>
+            <div class="chips"><span class="chip gold" id="s-money"></span></div>
+          </div>
+          <canvas class="scene" id="s-scene" width="160" height="104" aria-label="いまの部屋"></canvas>
+          <div id="s-list"></div>
+        </section>
+
+        <section class="view" id="v-log" hidden>
+          <div class="top">
+            <div class="date">記録帳</div>
+            <button class="btn ghost small" id="l-go-prefs" style="margin:0">設定</button>
+          </div>
+          <div class="card" id="l-week"></div>
+          <div class="card">
+            <div class="lbl"><span>部位ごとの前回</span></div>
+            <div class="splits" id="l-splits"></div>
+          </div>
+          <div class="card" id="l-cal"></div>
+          <div class="card">
+            <div class="lbl"><span>種目ごと（前回・ベスト）</span></div>
+            <div class="seg small" id="l-extab" role="radiogroup" aria-label="分割"></div>
+            <ul class="weights" id="l-ex"></ul>
+          </div>
+          <p class="hint center" id="l-total"></p>
+          <div>
+            <h2 class="sub">日ごとの記録<small>行をタップすると直せます</small></h2>
+            <ul class="days" id="l-days"></ul>
+            <button class="btn ghost small" id="l-more">全部を出す</button>
+          </div>
+        </section>
+
+        <section class="view" id="v-prefs" hidden>
+          <div class="top">
+            <div class="date">設定</div>
+            <button class="btn ghost small" id="p-back" style="margin:0">記録帳へ戻る</button>
+          </div>
+          <div>
+            <h2 class="sub">いつもの種目<small>タップで名前・部位を直す。↑↓で並べ替え</small></h2>
+            <ul class="exlist prefs" id="p-ex"></ul>
+            <button class="btn ghost small" id="p-add">種目を足す</button>
+          </div>
+          <div class="card">
+            <div class="lbl"><span>週の目標</span><span class="dot" id="p-goal-v"></span></div>
+            <input type="range" id="p-goal" min="1" max="7" step="1" style="accent-color:var(--gold)">
+            <p class="hint">記録帳とホームの「今週 ○ / 目標」に使います（試合の強さには関係しません）</p>
+          </div>
+          <div class="card">
+            <label class="check"><input type="checkbox" id="p-sleep"> ねむりの庭とつなぐ</label>
+            <p class="hint">同じ端末の「ねむりの庭」に今朝の睡眠があれば、自動で試合のコンディションに使います（目標時間以上で絶好調、1時間以上足りないと寝不足）。読めないときは「ふつう」で、得も損もしません</p>
+            <p class="hint" id="p-sleep-state"></p>
+          </div>
+          <div class="card">
+            <div class="lbl"><span>バックアップ</span></div>
+            <p class="hint">機種変更などに備えて、ときどき書き出してください。iPhone では共有シートから「ファイルに保存」</p>
+            <div class="row"><button class="btn" id="p-export">書き出す</button><button class="btn" id="p-import">読み込む</button></div>
+            <input type="file" id="p-file" accept="application/json,.json" hidden>
+          </div>
+          <div class="card">
+            <div class="lbl"><span>iPhone のホーム画面に置く</span></div>
+            <p class="hint">Safari で開いて、共有ボタン →「ホーム画面に追加」。ふだんはホーム画面のアイコンから開いてください（ブラウザのタブとは記録が別々です）</p>
+          </div>
+        </section>
+
+        <section class="view" id="v-after" hidden>
+          <div class="done-head">
+            <div class="done-title" id="a-title">トレーニング完了！</div>
+            <div class="done-sub" id="a-sub"></div>
+            <div class="done-pts"><span id="a-pts">0</span><small>点</small></div>
+          </div>
+          <canvas class="scene" id="a-scene" width="160" height="104" aria-label="鏡の前の分身"></canvas>
+          <div class="card" id="a-gain"></div>
+          <div class="card" id="a-body"></div>
+          <div id="a-events"></div>
+          <button class="btn primary" id="a-back">ジムに戻る</button>
+          <button class="btn ghost small" id="a-skip" style="align-self:center">演出をとばす</button>
+        </section>
+
+      </div>
+      <nav class="tabbar" aria-label="画面">
+        <button data-go="home"><span class="ti">◆</span>ジム</button>
+        <button data-go="record"><span class="ti">✎</span>記録</button>
+        <button data-go="fight"><span class="ti">✊</span>試合</button>
+        <button data-go="shop"><span class="ti">$</span>店</button>
+        <button data-go="log"><span class="ti">≡</span>記録帳</button>
+      </nav>
+      <div class="sheet" id="sheet" hidden><div class="panel" id="sheet-panel" role="dialog" aria-modal="true"></div></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
