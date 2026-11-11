@@ -3,7 +3,7 @@
 //   （ねむりの庭では機内モードで iOS の「機内モードをオフに…」が出たため、オフラインならネットを試さない）
 // - Google Fonts：一度取ったらキャッシュを使う
 // ファイルを増やしたら APP に足し、VERSION を上げる
-const VERSION = 'v1-2026-11-11c';
+const VERSION = 'v1-2026-11-11d';
 const APP_CACHE = 'kintore-app-' + VERSION, FONT_CACHE = 'kintore-fonts-v1';
 const APP = [
   './', './index.html', './manifest.webmanifest',

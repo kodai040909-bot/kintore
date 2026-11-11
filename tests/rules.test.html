@@ -315,15 +315,17 @@ test('ねむりの庭：きのうの夜しかない・おやすみ中・デー�
   eq(readSleep('2026-11-12', mem()), null);
   const st = mem(); st.setItem(NEMURI_KEY, '{こわれた'); eq(readSleep('2026-11-12', st), null);
 });
-test('コンディション：目標以上は絶好調、1時間足りないまではふつう、それより短いと寝不足、分からないとふつう', () => {
-  eq(conditionOf({ hours: 7.2, goal: 7 }).key, 'great'); eq(conditionOf({ hours: 6.1, goal: 7 }).key, 'normal');
-  eq(conditionOf({ hours: 5.5, goal: 7 }).key, 'short'); eq(conditionOf(null).key, 'unknown'); eq(conditionOf(null).name, 'ふつう');
+test('コンディション：目標以上は絶好調、あと1時間以内は好調、それより短いと・分からないとふつう', () => {
+  eq(conditionOf({ hours: 7.2, goal: 7 }).key, 'great'); eq(conditionOf({ hours: 6.1, goal: 7 }).key, 'good');
+  eq(conditionOf({ hours: 5.5, goal: 7 }).name, 'ふつう'); eq(conditionOf(null).name, 'ふつう');
 });
-test('絶好調は能力 +5%、寝不足は体力 90% から（サボりとも重なる）', () => {
+test('睡眠はごほうびだけ：絶好調 +5%、好調 +2%、短くても損はしない（体力が下がるのはサボりだけ）', () => {
   const s = gyms(gymOn(['2026-11-01']));
   near(meForFight(s, '2026-11-02', { hours: 8, goal: 7 }).ab.punch, s.ability.punch * 1.05);
-  eq(meForFight(s, '2026-11-02', { hours: 5, goal: 7 }).hpPct, 90);
-  eq(meForFight(s, '2026-11-08', { hours: 5, goal: 7 }).hpPct, 86);
+  near(meForFight(s, '2026-11-02', { hours: 6.5, goal: 7 }).ab.punch, s.ability.punch * 1.02);
+  const short = meForFight(s, '2026-11-02', { hours: 4, goal: 7 });
+  near(short.ab.punch, s.ability.punch); eq(short.hpPct, 100);
+  eq(meForFight(s, '2026-11-08', { hours: 4, goal: 7 }).hpPct, 96);
 });
 test('種目を足す・名前を直す・空の名前は足せない', () => {
   let s = addExercise(initialState(), { id: 'my-1', name: ' インクラインベンチ ', group: 'push' });

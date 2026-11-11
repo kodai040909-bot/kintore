@@ -72,7 +72,7 @@ export function renderFight(app) {
   const hp = cond.hp - dip;
   $('f-cond').textContent = cond.name + (hp < 100 ? `・体力 ${hp}%` : '');
   $('f-condhint').textContent = [
-    sleep ? `今朝のねむりの庭：${fmtHours(sleep.hours)}（目標 ${fmtHours(sleep.goal)}）→ ${cond.name}${cond.key === 'great' ? '（全部の能力 +5%）' : cond.key === 'short' ? '（体力 90% から）' : ''}` : '',
+    sleep ? `今朝のねむりの庭：${fmtHours(sleep.hours)}（目標 ${fmtHours(sleep.goal)}）→ ${cond.name}${cond.key === 'great' ? '（全部の能力 +5%）' : cond.key === 'good' ? '（全部の能力 +2%）' : '（損はなし）'}` : '',
     dip ? 'しばらくジムを休んだので、試合の体力が少し下がっています。' : '',
   ].filter(Boolean).join(' ') || '';
 

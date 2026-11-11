@@ -260,16 +260,17 @@ export function recordFight(state, today, opp, seed, res) {
 
 /**
  * コンディション（design.md §11.1）。sleep は ねむりの庭から読んだ今朝の睡眠（なければ null＝ふつう）
- * 目標時間以上：絶好調（全能力 +5%）／目標 −1時間まで：ふつう／それより短い：寝不足（体力 90% から）
+ * 睡眠はごほうびだけ（2026-11-11 本人：目標は高めなので、足りない日に罰があると厳しすぎ・ジムのやる気が下がる）
+ * 目標時間以上：絶好調（全能力 +5%）／目標まであと1時間以内：好調（全能力 +2%）／それより短い・分からない：ふつう（何も変わらない）
  */
 export function conditionOf(sleep) {
   if (!sleep) return { key: 'unknown', name: 'ふつう', hp: 100, mult: 1 };
   if (sleep.hours >= sleep.goal) return { key: 'great', name: '絶好調', hp: 100, mult: 1.05 };
-  if (sleep.hours >= sleep.goal - 1) return { key: 'normal', name: 'ふつう', hp: 100, mult: 1 };
-  return { key: 'short', name: '寝不足', hp: 90, mult: 1 };
+  if (sleep.hours >= sleep.goal - 1) return { key: 'good', name: '好調', hp: 100, mult: 1.02 };
+  return { key: 'normal', name: 'ふつう', hp: 100, mult: 1 };
 }
 
-/** 試合に出る自分。体力はサボりと寝不足のぶん下がる。絶好調なら能力 +5% */
+/** 試合に出る自分。体力はサボりのぶん下がる。よく寝た朝は能力が少し上がる */
 export function meForFight(state, today, sleep = null) {
   const c = conditionOf(sleep);
   const ab = Object.fromEntries(Object.entries(state.ability).map(([k, v]) => [k, v * c.mult]));
