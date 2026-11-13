@@ -114,7 +114,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
 .bar i.flash{box-shadow:0 0 10px 2px rgba(255,236,190,.8);filter:brightness(1.6)}
 .pop{animation:pop .45s ease}
 @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.45);color:#fff3d6}100%{transform:scale(1)}}
-.done-head{text-align:center;padding:18px 0 6px;background:radial-gradient(ellipse at 50% 40%,rgba(217,163,91,.22),transparent 70%)}
+.done-head{overflow:hidden;text-align:center;padding:18px 0 6px;background:radial-gradient(ellipse at 50% 40%,rgba(217,163,91,.22),transparent 70%)}
 .done-title{font-family:var(--f-dot);font-size:26px;letter-spacing:.06em;color:var(--gold);animation:slam .5s cubic-bezier(.2,1.6,.4,1) both}
 @keyframes slam{0%{transform:scale(2.2);opacity:0}100%{transform:scale(1);opacity:1}}
 .done-sub{font-size:13px;color:var(--muted);margin-top:2px}
@@ -151,7 +151,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
 .todo li small{display:block;font-size:11px;color:var(--muted)}
 
 /* 試合の再生（M4） */
-.stage{position:relative}
+.stage{position:relative;overflow:hidden}   /* 大きな文字の演出が外へはみ出してページが広がらないように */
 .stage .names{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);padding:0 4px 2px}
 .banner{position:absolute;left:0;right:0;top:18px;bottom:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font-family:var(--f-dot);font-size:30px;color:var(--gold);text-shadow:2px 2px 0 #191317,-2px -2px 0 #191317,2px -2px 0 #191317,-2px 2px 0 #191317}
 .banner.on{animation:slam .35s cubic-bezier(.2,1.6,.4,1) both}
@@ -234,3 +234,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
 
 /* アプリの切り替え（入口：庭とジム） */
 a.chip.link{text-decoration:none;color:var(--ink);background:var(--panel-2)}
+
+/* iPhone：演出がはみ出してもページの横幅を広げない／ボタンの連打でダブルタップの拡大をしない（2026-11-13 本人） */
+html{overflow-x:clip;touch-action:manipulation}
+body{overflow-x:clip}
+button,a,input,select,label,canvas{touch-action:manipulation}
